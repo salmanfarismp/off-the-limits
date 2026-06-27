@@ -17,7 +17,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Kinetic Velocity",
+  title: "OFF THE LIMITS",
   description: "High-performance fitness tracking PWA",
   manifest: "/manifest.json",
 };
@@ -41,6 +41,7 @@ export default function RootLayout({
       className={`${montserrat.variable} ${inter.variable} h-full antialiased`}
     >
       <head>
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"></link>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black" />
         <link rel="manifest" href="/manifest.json" />
