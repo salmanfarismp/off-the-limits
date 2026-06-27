@@ -39,7 +39,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${montserrat.variable} ${inter.variable} h-full antialiased`}
+      className={`${montserrat.variable} ${inter.variable} h-full overflow-hidden antialiased`}
     >
       <head>
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"></link>
@@ -47,9 +47,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black" />
         <link rel="manifest" href="/manifest.json" />
       </head>
-      <body className="min-h-screen bg-[#0a0a0a] text-[#e5e2e1] flex justify-center items-start">
+      <body className="h-full overflow-hidden bg-[#0a0a0a] text-[#e5e2e1] flex justify-center items-start">
         {/* Persistent mobile-first container */}
-        <div className="w-full max-w-md min-h-screen bg-[#131313] flex flex-col relative border-x border-[#2a2a2a] shadow-2xl overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
+        <div className="w-full max-w-md h-full bg-[#131313] flex flex-col relative border-x border-[#2a2a2a] shadow-2xl overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
           <main className="flex-1 px-4 pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-6 overflow-y-auto flex flex-col">
             <UserProvider>{children}</UserProvider>
           </main>
