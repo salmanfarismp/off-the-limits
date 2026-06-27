@@ -18,6 +18,7 @@ interface LogItem {
   icon_id: number | null;
   logged_at: string | null;
   status: number | null;
+  last_updated_at: string | null;
 }
 
 interface DayGroup {
@@ -70,17 +71,36 @@ const formatTimelineDate = (dateStr: string) => {
 const formatLoggedAt = (loggedAt: string | null) => {
   if (!loggedAt) return "No log today";
   const date = new Date(loggedAt);
-  return `Logged at ${date.toLocaleTimeString("en-US", {
+  const today = new Date();
+
+  const isToday =
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate();
+
+  const timeStr = date.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
-  })}`;
+  });
+
+  if (isToday) {
+    return `Logged at ${timeStr}`;
+  } else {
+    const dateStr = date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    return `Logged at ${timeStr} on ${dateStr}`;
+  }
 };
 
 export default function Home() {
   const { userId, isLoading: isUserLoading } = useUser();
   const [dayGroups, setDayGroups] = useState<DayGroup[]>([]);
   const [limitDays, setLimitDays] = useState(2);
+  const [hasMore, setHasMore] = useState<boolean>(true);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(true);
 
   useEffect(() => {
@@ -105,11 +125,14 @@ export default function Home() {
         }
 
         if (data) {
-          const formattedGroups: DayGroup[] = data.map((item: any) => ({
-            date: formatTimelineDate(item.date),
-            rawDate: item.date,
-            entries: item.logs || [],
-          }));
+          setHasMore(data.hasMore);
+          const formattedGroups: DayGroup[] = data.timeline.map(
+            (item: any) => ({
+              date: formatTimelineDate(item.date),
+              rawDate: item.date,
+              entries: item.logs || [],
+            }),
+          );
           setDayGroups(formattedGroups);
         }
       } catch (err) {
@@ -237,7 +260,7 @@ export default function Home() {
                             {log.exercise}
                           </span>
                           <span className="text-[11px] text-[#8e8d8c] font-inter mt-0.5">
-                            {formatLoggedAt(log.logged_at)}
+                            {formatLoggedAt(log.last_updated_at)}
                           </span>
                         </div>
                       </div>
@@ -266,12 +289,14 @@ export default function Home() {
         ))}
 
         {/* Load Previous Days Boundary outline button */}
-        <button
-          onClick={loadPreviousDays}
-          className="w-full bg-transparent border border-[#2a2a2a] text-white hover:border-[#8e8d8c] hover:bg-[#1a1a1a]/20 text-[11px] font-bold tracking-widest py-3.5 rounded-[0.5rem] mt-6 uppercase font-inter active:scale-[0.98] transition-all duration-100"
-        >
-          LOAD PREVIOUS DAYS
-        </button>
+        {hasMore && (
+          <button
+            onClick={loadPreviousDays}
+            className="w-full bg-transparent border border-[#2a2a2a] text-white hover:border-[#8e8d8c] hover:bg-[#1a1a1a]/20 text-[11px] font-bold tracking-widest py-3.5 rounded-[0.5rem] mt-6 uppercase font-inter active:scale-[0.98] transition-all duration-100"
+          >
+            LOAD PREVIOUS DAYS
+          </button>
+        )}
       </div>
 
       {/* Floating Action Link (FAB) layer - constrained within mobile layout */}

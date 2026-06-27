@@ -29,11 +29,10 @@ function LogFormContent() {
   const goalId = searchParams.get("goal_id") || "";
   const logId = searchParams.get("log_id") || "";
   const title = searchParams.get("title") || "Pushups";
-  const initialReps = Number(searchParams.get("reps")) || 25;
+  const initialReps = Number(searchParams.get("reps")) || 0;
   const unit = searchParams.get("unit") || "reps";
   const date = searchParams.get("date") || "";
-
-  const [repsCount, setRepsCount] = useState(25);
+  const [repsCount, setRepsCount] = useState(0);
   const [yesterdayReps, setYesterdayReps] = useState<number | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
@@ -91,11 +90,15 @@ function LogFormContent() {
     }
 
     const supabase = createClient();
+
     const { error: rpcError } = await supabase.rpc("create_daily_workout_log", {
       target_user_id: userId,
       target_goal_id: parseInt(goalId, 10),
       input_count: repsCount,
-      input_date: date || new Date().toISOString(),
+      input_date:
+        date && !isNaN(new Date(date.replace(" ", "+")).getTime())
+          ? new Date(date.replace(" ", "+")).toISOString()
+          : new Date().toISOString(),
       target_log_id: logId ? parseInt(logId, 10) : null,
     });
 
@@ -174,7 +177,7 @@ function LogFormContent() {
         {/* Repetitions Stepper Card */}
         <div className="bg-[#1c1b1b] border border-[#2a2a2a] border-l-4 border-l-[#abd600] rounded-[0.5rem] p-6 mt-8 shadow-2xl flex flex-col justify-between">
           <span className="text-[10px] font-extrabold tracking-widest text-[#8e8d8c] font-inter uppercase">
-            REPETITIONS COUNT
+            {unit}
           </span>
 
           <div className="flex justify-between items-center mt-6 px-4">
@@ -234,7 +237,13 @@ function LogFormContent() {
 
 export default function LogFormPage() {
   return (
-    <Suspense fallback={<div className="text-white text-center mt-10">Loading Performance Log...</div>}>
+    <Suspense
+      fallback={
+        <div className="text-white text-center mt-10">
+          Loading Performance Log...
+        </div>
+      }
+    >
       <LogFormContent />
     </Suspense>
   );
