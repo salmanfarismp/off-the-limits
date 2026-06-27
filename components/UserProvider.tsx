@@ -44,11 +44,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
         // Generate and insert a new user_id
         const newUserId = generateUUID();
+        const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const supabase = createClient();
 
         const { error } = await supabase
           .from("User")
-          .insert({ user_id: newUserId });
+          .insert({ 
+            user_id: newUserId,
+            timezone: userTimezone,
+          });
 
         if (error) {
           console.error("Error creating user in Supabase:", error);
