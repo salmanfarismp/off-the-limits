@@ -3,23 +3,78 @@
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+import { useUser } from "@/components/UserProvider";
+
+const getDayBefore = (dateStr: string) => {
+  const parts = dateStr.split("T")[0].split("-");
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1; // 0-indexed
+  const day = parseInt(parts[2], 10);
+
+  const d = new Date(year, month, day);
+  d.setDate(d.getDate() - 1);
+
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+};
 
 function LogFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { userId, isLoading: isUserLoading } = useUser();
 
-  const id = searchParams.get("id") || "";
+  const goalId = searchParams.get("goal_id") || "";
+  const logId = searchParams.get("log_id") || "";
   const title = searchParams.get("title") || "Pushups";
   const initialReps = Number(searchParams.get("reps")) || 25;
-  const type = searchParams.get("type") || "pushups";
+  const unit = searchParams.get("unit") || "reps";
+  const date = searchParams.get("date") || "";
 
   const [repsCount, setRepsCount] = useState(25);
+  const [yesterdayReps, setYesterdayReps] = useState<number | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   useEffect(() => {
     if (initialReps) {
       setRepsCount(initialReps);
     }
   }, [initialReps]);
+
+  useEffect(() => {
+    if (!goalId || !date) {
+      setIsLoadingHistory(false);
+      return;
+    }
+
+    async function fetchYesterdayPerformance() {
+      try {
+        const dayBeforeStr = getDayBefore(date);
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("Log")
+          .select("count")
+          .eq("goal_id", goalId)
+          .gte("created_at", `${dayBeforeStr}T00:00:00Z`)
+          .lte("created_at", `${dayBeforeStr}T23:59:59Z`)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error fetching yesterday performance:", error);
+        } else if (data) {
+          setYesterdayReps(data.count);
+        }
+      } catch (err) {
+        console.error("Failed to load history:", err);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    }
+
+    fetchYesterdayPerformance();
+  }, [goalId, date]);
 
   const handleDecrement = () => {
     setRepsCount((prev) => Math.max(0, prev - 1));
@@ -29,72 +84,41 @@ function LogFormContent() {
     setRepsCount((prev) => prev + 1);
   };
 
-  const handleSave = () => {
-    if (!id) {
+  const handleSave = async () => {
+    if (!goalId || !userId) {
       router.push("/");
       return;
     }
 
-    const saved = localStorage.getItem("off-the-limits-logs");
-    let customLogs = [];
-    if (saved) {
-      try {
-        customLogs = JSON.parse(saved);
-      } catch (e) {}
+    const supabase = createClient();
+    const { error: rpcError } = await supabase.rpc("create_daily_workout_log", {
+      target_user_id: userId,
+      target_goal_id: parseInt(goalId, 10),
+      input_count: repsCount,
+      input_date: date || new Date().toISOString(),
+      target_log_id: logId ? parseInt(logId, 10) : null,
+    });
+
+    if (rpcError) {
+      console.error("Error logging workout via RPC:", rpcError);
     }
 
-    // Determine badge and accent state based on default items
-    let badgeText = "NEW RECORD";
-    let badgeType: "better" | "waiting" | "almost" | "done" = "better";
-
-    if (id === "1") {
-      badgeText = "BETTER THAN YESTERDAY";
-      badgeType = "better";
-    } else if (id === "2") {
-      badgeText = "WAITING";
-      badgeType = "waiting";
-    } else if (id === "3") {
-      badgeText = "ALMOST THERE";
-      badgeType = "almost";
-    } else if (id === "4") {
-      badgeText = "YOU DID IT";
-      badgeType = "done";
-    }
-
-    const updatedLog = {
-      id,
-      type,
-      title,
-      timestamp: "Logged just now",
-      reps: repsCount,
-      badgeText,
-      badgeType,
-    };
-
-    const hasLog = customLogs.some((c: any) => c.id === id);
-    let updatedList = [];
-    if (hasLog) {
-      updatedList = customLogs.map((c: any) => (c.id === id ? updatedLog : c));
-    } else {
-      updatedList = [updatedLog, ...customLogs];
-    }
-
-    localStorage.setItem("off-the-limits-logs", JSON.stringify(updatedList));
     router.push("/");
   };
 
-  const getHistoryText = (logType: string) => {
-    switch (logType) {
-      case "pushups":
-        return "Yesterday: 22 reps";
-      case "pullups":
-        return "Yesterday: 8 reps";
-      case "squats":
-        return "Yesterday: 40 reps";
-      default:
-        return "Yesterday: 15 reps";
-    }
+  const getHistoryText = () => {
+    if (isLoadingHistory) return "Loading performance history...";
+    if (yesterdayReps === null) return "Yesterday: No log";
+    return `Yesterday: ${yesterdayReps} ${unit}`;
   };
+
+  if (isUserLoading) {
+    return (
+      <div className="absolute inset-0 bg-[#131313] z-50 flex justify-center items-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#abd600]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="absolute inset-0 bg-[#131313] z-50 overflow-y-auto px-4 py-6 flex flex-col justify-between select-none">
@@ -143,7 +167,7 @@ function LogFormContent() {
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 15 15" />
             </svg>
-            <span>{getHistoryText(type)}</span>
+            <span>{getHistoryText()}</span>
           </div>
         </div>
 

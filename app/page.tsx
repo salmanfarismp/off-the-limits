@@ -2,205 +2,127 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { createClient } from "@/utils/supabase/client";
+import { useUser } from "@/components/UserProvider";
 
 interface LogItem {
-  id: string;
-  type: "pushups" | "pullups" | "squats";
-  title: string;
-  timestamp: string;
-  reps: number;
-  badgeText: string;
-  badgeType: "better" | "waiting" | "almost" | "done";
+  goal_id: string;
+  log_id: string | null;
+  exercise: string;
+  count: number;
+  unit: string | null;
+  logged_at: string | null;
+  status: number | null;
 }
 
 interface DayGroup {
   date: string;
+  rawDate: string;
   entries: LogItem[];
 }
 
-const initialDayGroups: DayGroup[] = [
-  {
-    date: "TODAY, OCT 24",
-    entries: [
-      {
-        id: "1",
-        type: "pushups",
-        title: "Pushups",
-        timestamp: "Logged at 08:30 AM",
-        reps: 35,
-        badgeText: "BETTER THAN YESTERDAY",
-        badgeType: "better",
-      },
-      {
-        id: "2",
-        type: "pullups",
-        title: "Pullups",
-        timestamp: "No log today",
-        reps: 12,
-        badgeText: "WAITING",
-        badgeType: "waiting",
-      },
-    ],
-  },
-  {
-    date: "YESTERDAY, OCT 23",
-    entries: [
-      {
-        id: "3",
-        type: "pushups",
-        title: "Pushups",
-        timestamp: "Logged at 07:15 PM",
-        reps: 32,
-        badgeText: "ALMOST THERE",
-        badgeType: "almost",
-      },
-      {
-        id: "4",
-        type: "pullups",
-        title: "Pullups",
-        timestamp: "Logged at 07:20 PM",
-        reps: 10,
-        badgeText: "YOU DID IT",
-        badgeType: "done",
-      },
-    ],
-  },
-];
+const getExerciseType = (title: string): "pushups" | "pullups" | "squats" => {
+  const t = title.toLowerCase();
+  if (t.includes("pushup")) return "pushups";
+  if (t.includes("pullup")) return "pullups";
+  if (t.includes("squat")) return "squats";
+  return "pushups";
+};
+
+const formatTimelineDate = (dateStr: string) => {
+  const parts = dateStr.split("T")[0].split("-");
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1; // 0-indexed
+  const day = parseInt(parts[2], 10);
+  const dateObj = new Date(year, month, day);
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const isSameDay = (d1: Date, d2: Date) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  const formattedMonthDay = `${months[month]} ${day}`;
+
+  if (isSameDay(dateObj, today)) {
+    return `TODAY, ${formattedMonthDay}`;
+  } else if (isSameDay(dateObj, yesterday)) {
+    return `YESTERDAY, ${formattedMonthDay}`;
+  } else {
+    return `${formattedMonthDay}, ${year}`;
+  }
+};
+
+const formatLoggedAt = (loggedAt: string | null) => {
+  if (!loggedAt) return "No log today";
+  const date = new Date(loggedAt);
+  return `Logged at ${date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  })}`;
+};
 
 export default function Home() {
-  const [dayGroups, setDayGroups] = useState<DayGroup[]>(initialDayGroups);
+  const { userId, isLoading: isUserLoading } = useUser();
+  const [dayGroups, setDayGroups] = useState<DayGroup[]>([]);
+  const [limitDays, setLimitDays] = useState(2);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(true);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("off-the-limits-logs");
-      if (saved) {
-        try {
-          const customLogs = JSON.parse(saved);
-          if (customLogs && customLogs.length > 0) {
-            setDayGroups((prev) => {
-              // Map all groups, replacing entries if custom logs contain the same ID
-              return prev.map((group) => {
-                const updatedEntries = group.entries.map((entry) => {
-                  const customOverride = customLogs.find((c: any) => c.id === entry.id);
-                  if (customOverride) {
-                    return customOverride;
-                  }
-                  return entry;
-                });
-                
-                // If it is the first group (TODAY, OCT 24), we also prepend any new custom logs
-                if (group.date === "TODAY, OCT 24") {
-                  // Find custom logs that do NOT override any existing logs in any of the groups
-                  const allBaseIds = new Set(
-                    prev.flatMap((g) => g.entries.map((e) => e.id))
-                  );
-                  const newCustomLogs = customLogs.filter(
-                    (c: any) => !allBaseIds.has(c.id)
-                  );
-                  // Filter out duplicates that might already be in updatedEntries
-                  const existingIds = new Set(updatedEntries.map((e) => e.id));
-                  const uniqueNewCustom = newCustomLogs.filter((c: any) => !existingIds.has(c.id));
-                  
-                  return {
-                    ...group,
-                    entries: [...uniqueNewCustom, ...updatedEntries]
-                  };
-                }
-                
-                return {
-                  ...group,
-                  entries: updatedEntries
-                };
-              });
-            });
-          }
-        } catch (e) {}
+    if (isUserLoading || !userId) return;
+
+    async function fetchTimeline() {
+      setIsLoadingTimeline(true);
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.rpc("get_user_daily_timeline_paginated", {
+          target_user_id: userId,
+          limit_days: limitDays,
+          offset_days: 0,
+        });
+
+        if (error) {
+          console.error("Error fetching timeline:", error);
+          return;
+        }
+
+        if (data) {
+          const formattedGroups: DayGroup[] = data.map((item: any) => ({
+            date: formatTimelineDate(item.date),
+            rawDate: item.date,
+            entries: item.logs || [],
+          }));
+          setDayGroups(formattedGroups);
+        }
+      } catch (err) {
+        console.error("Failed to load daily timeline:", err);
+      } finally {
+        setIsLoadingTimeline(false);
       }
     }
-  }, []);
 
-  const clearLogs = () => {
-    setDayGroups([]);
-    localStorage.removeItem("off-the-limits-logs");
-  };
-
-  const resetLogs = () => {
-    setDayGroups(initialDayGroups);
-    localStorage.removeItem("off-the-limits-logs");
-  };
-
-  const deleteLog = (id: string) => {
-    const updatedGroups = dayGroups
-      .map((group) => ({
-        ...group,
-        entries: group.entries.filter((entry) => entry.id !== id),
-      }))
-      .filter((group) => group.entries.length > 0);
-    setDayGroups(updatedGroups);
-
-    const saved = localStorage.getItem("off-the-limits-logs");
-    if (saved) {
-      try {
-        const customLogs = JSON.parse(saved);
-        const filtered = customLogs.filter((c: any) => c.id !== id);
-        localStorage.setItem("off-the-limits-logs", JSON.stringify(filtered));
-      } catch (e) {}
-    }
-  };
-
-  const addNewGoal = () => {
-    const newLog: LogItem = {
-      id: Date.now().toString(),
-      type: "squats",
-      title: "Squats",
-      timestamp: "Logged just now",
-      reps: 50,
-      badgeText: "PERSONAL BEST",
-      badgeType: "better",
-    };
-
-    // Add to the first day group if it exists, otherwise create TODAY
-    if (dayGroups.length > 0) {
-      setDayGroups(
-        dayGroups.map((group, idx) => {
-          if (idx === 0) {
-            return {
-              ...group,
-              entries: [newLog, ...group.entries],
-            };
-          }
-          return group;
-        })
-      );
-    } else {
-      setDayGroups([
-        {
-          date: "TODAY, OCT 24",
-          entries: [newLog],
-        },
-      ]);
-    }
-  };
+    fetchTimeline();
+  }, [userId, isUserLoading, limitDays]);
 
   const loadPreviousDays = () => {
-    const pastGroup: DayGroup = {
-      date: "OCT 22, 2026",
-      entries: [
-        {
-          id: "past-" + Date.now(),
-          type: "pushups",
-          title: "Pushups",
-          timestamp: "Logged at 06:40 PM",
-          reps: 28,
-          badgeText: "COMPLETED",
-          badgeType: "done",
-        },
-      ],
-    };
-    setDayGroups([...dayGroups, pastGroup]);
+    setLimitDays((prev) => prev + 2);
   };
 
-  const hasData = dayGroups.some((group) => group.entries.length > 0);
+  const hasData = dayGroups.length > 0;
+
+  if (isUserLoading || isLoadingTimeline) {
+    return (
+      <div className="flex flex-col min-h-[calc(100vh-5rem)] justify-center items-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#abd600]"></div>
+        <p className="text-sm text-[#8e8d8c] mt-4 font-inter">Loading Performance Archive...</p>
+      </div>
+    );
+  }
 
   // Render Empty State if no logs exist
   if (!hasData) {
@@ -216,12 +138,6 @@ export default function Home() {
           <span className="text-[20px] font-black italic tracking-wider text-[#abd600] font-montserrat uppercase select-none">
             OFF THE LIMITS
           </span>
-          <button
-            onClick={resetLogs}
-            className="text-[10px] text-[#8e8d8c] hover:text-[#abd600] uppercase font-bold tracking-widest font-inter border border-[#2a2a2a] px-2.5 py-1 rounded transition-colors"
-          >
-            Show Daily Log
-          </button>
         </header>
 
         {/* Center content stack */}
@@ -354,12 +270,6 @@ export default function Home() {
         <span className="text-[20px] font-black italic tracking-wider text-[#abd600] font-montserrat uppercase select-none">
           OFF THE LIMITS
         </span>
-        <button
-          onClick={clearLogs}
-          className="text-[10px] text-[#8e8d8c] hover:text-[#abd600] uppercase font-bold tracking-widest font-inter border border-[#2a2a2a] px-2.5 py-1 rounded transition-colors"
-        >
-          Clear Logs
-        </button>
       </header>
 
       {/* Header section info */}
@@ -404,150 +314,194 @@ export default function Home() {
 
             {/* Daily Log Cards List */}
             <div className="mt-5 flex flex-col gap-4 relative z-10">
-              {group.entries.map((log) => (
-                <Link
-                  key={log.id}
-                  href={`/log-form?id=${log.id}&title=${encodeURIComponent(log.title)}&reps=${log.reps}&type=${log.type}`}
-                  className="group relative bg-[#1c1b1b] border border-[#2a2a2a] border-l-4 border-l-[#0266ff] rounded-[0.5rem] p-4 flex flex-col active:scale-[0.98] transition-transform duration-100 cursor-pointer select-none animate-fade-in"
-                >
-                  {/* Edit helper hover overlay */}
-                  <div className="absolute top-1.5 right-2 text-[9px] text-[#8e8d8c] opacity-0 group-hover:opacity-100 transition-opacity">
-                    Click to edit log
-                  </div>
+              {group.entries.map((log) => {
+                const logType = getExerciseType(log.exercise);
+                const isWaiting = log.status === null || log.status === 0;
 
-                  {/* Card Top Row */}
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-3">
-                      {/* Circular icon wrapper */}
-                      <div className="w-9 h-9 rounded-full bg-[#131313] flex items-center justify-center shrink-0 border border-[#2a2a2a]">
-                        {log.type === "pushups" ? (
-                          <svg
-                            className="w-4.5 h-4.5 text-blue-400 rotate-45"
-                            fill="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M6 3h2v18H6zm10 0h2v18h-2zM2 8h4v8H2zm16 0h4v8h-4zM6 11h10v2H6z" />
-                          </svg>
-                        ) : log.type === "pullups" ? (
-                          <svg
-                            className="w-4.5 h-4.5 text-blue-400 rotate-45"
-                            fill="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M1 9h2v6H1zm20 0h2v6h-2zm-3-2h2v10h-2zM4 7h2v10H4zm2 4h12v2H6z" />
-                          </svg>
-                        ) : (
-                          <svg
-                            className="w-4.5 h-4.5 text-blue-400"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M4 18h16M4 6h16M12 6v12" />
-                          </svg>
+                let badgeText = "WAITING";
+                let badgeType: "better" | "waiting" | "almost" | "done" | "progressing" = "waiting";
+
+                if (log.status === 1) {
+                  badgeText = "BETTER THAN YESTERDAY";
+                  badgeType = "better";
+                } else if (log.status === 2) {
+                  badgeText = "ALMOST THERE";
+                  badgeType = "almost";
+                } else if (log.status === 3) {
+                  badgeText = "YOU DID IT";
+                  badgeType = "done";
+                } else if (log.status === 4) {
+                  badgeText = "PROGRESSING";
+                  badgeType = "progressing";
+                }
+
+                return (
+                  <Link
+                    key={log.log_id || log.goal_id}
+                    href={`/log-form?goal_id=${log.goal_id}&log_id=${log.log_id || ""}&title=${encodeURIComponent(
+                      log.exercise
+                    )}&reps=${log.count}&unit=${log.unit || "reps"}&date=${group.rawDate}`}
+                    className={`group relative bg-[#1c1b1b] border border-[#2a2a2a] border-l-4 rounded-[0.5rem] p-4 flex flex-col active:scale-[0.98] transition-transform duration-100 cursor-pointer select-none animate-fade-in ${
+                      isWaiting ? "border-l-[#2a2a2a]" : "border-l-[#0266ff]"
+                    }`}
+                  >
+                    {/* Edit helper hover overlay */}
+                    <div className="absolute top-1.5 right-2 text-[9px] text-[#8e8d8c] opacity-0 group-hover:opacity-100 transition-opacity">
+                      {isWaiting ? "Click to add log" : "Click to edit log"}
+                    </div>
+
+                    {/* Card Top Row */}
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-3">
+                        {/* Circular icon wrapper */}
+                        <div className="w-9 h-9 rounded-full bg-[#131313] flex items-center justify-center shrink-0 border border-[#2a2a2a]">
+                          {logType === "pushups" ? (
+                            <svg
+                              className="w-4.5 h-4.5 text-blue-400 rotate-45"
+                              fill="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M6 3h2v18H6zm10 0h2v18h-2zM2 8h4v8H2zm16 0h4v8h-4zM6 11h10v2H6z" />
+                            </svg>
+                          ) : logType === "pullups" ? (
+                            <svg
+                              className="w-4.5 h-4.5 text-blue-400 rotate-45"
+                              fill="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M1 9h2v6H1zm20 0h2v6h-2zm-3-2h2v10h-2zM4 7h2v10H4zm2 4h12v2H6z" />
+                            </svg>
+                          ) : (
+                            <svg
+                              className="w-4.5 h-4.5 text-blue-400"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M4 18h16M4 6h16M12 6v12" />
+                            </svg>
+                          )}
+                        </div>
+
+                        {/* Title & Notes */}
+                        <div className="flex flex-col">
+                          <span className="text-[15px] font-bold text-white font-inter">
+                            {log.exercise}
+                          </span>
+                          <span className="text-[11px] text-[#8e8d8c] font-inter mt-0.5">
+                            {formatLoggedAt(log.logged_at)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Badge Pill */}
+                      <div
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-extrabold tracking-wider font-inter uppercase ${
+                          badgeType === "waiting"
+                            ? "text-[#8e8d8c] border-[#2a2a2a] bg-transparent"
+                            : "text-blue-400 border-blue-500/20 bg-blue-500/[0.03]"
+                        }`}
+                      >
+                        {badgeType === "better" && (
+                          <>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="w-2.5 h-2.5"
+                            >
+                              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                              <polyline points="16 7 22 7 22 13" />
+                            </svg>
+                            <span>{badgeText}</span>
+                          </>
+                        )}
+                        {badgeType === "waiting" && (
+                          <>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              className="w-2.5 h-2.5"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                            <span>{badgeText}</span>
+                          </>
+                        )}
+                        {badgeType === "almost" && (
+                          <>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              className="w-2.5 h-2.5"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <line x1="12" y1="16" x2="12" y2="12" />
+                              <line x1="12" y1="8" x2="12.01" y2="8" />
+                            </svg>
+                            <span>{badgeText}</span>
+                          </>
+                        )}
+                        {badgeType === "done" && (
+                          <>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="3"
+                              className="w-2.5 h-2.5"
+                            >
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <span>{badgeText}</span>
+                          </>
+                        )}
+                        {badgeType === "progressing" && (
+                          <>
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="w-2.5 h-2.5"
+                            >
+                              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+                              <polyline points="16 7 22 7 22 13" />
+                            </svg>
+                            <span>{badgeText}</span>
+                          </>
                         )}
                       </div>
-
-                      {/* Title & Notes */}
-                      <div className="flex flex-col">
-                        <span className="text-[15px] font-bold text-white font-inter">
-                          {log.title}
-                        </span>
-                        <span className="text-[11px] text-[#8e8d8c] font-inter mt-0.5">
-                          {log.timestamp}
-                        </span>
-                      </div>
                     </div>
 
-                    {/* Badge Pill */}
-                    <div
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-extrabold tracking-wider font-inter uppercase ${
-                        log.badgeType === "waiting"
-                          ? "text-[#8e8d8c] border-[#2a2a2a] bg-transparent"
-                          : "text-blue-400 border-blue-500/20 bg-blue-500/[0.03]"
-                      }`}
-                    >
-                      {log.badgeType === "better" && (
-                        <>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="w-2.5 h-2.5"
-                          >
-                            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                            <polyline points="16 7 22 7 22 13" />
-                          </svg>
-                          <span>{log.badgeText}</span>
-                        </>
-                      )}
-                      {log.badgeType === "waiting" && (
-                        <>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            className="w-2.5 h-2.5"
-                          >
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                          </svg>
-                          <span>{log.badgeText}</span>
-                        </>
-                      )}
-                      {log.badgeType === "almost" && (
-                        <>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            className="w-2.5 h-2.5"
-                          >
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="16" x2="12" y2="12" />
-                            <line x1="12" y1="8" x2="12.01" y2="8" />
-                          </svg>
-                          <span>{log.badgeText}</span>
-                        </>
-                      )}
-                      {log.badgeType === "done" && (
-                        <>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            className="w-2.5 h-2.5"
-                          >
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                          <span>{log.badgeText}</span>
-                        </>
-                      )}
+                    {/* Card Bottom Row: Large Numeric Metric */}
+                    <div className="mt-4 flex items-baseline select-none">
+                      <span className="text-[28px] font-black text-white font-montserrat tracking-tight leading-none">
+                        {log.count}
+                      </span>
+                      <span className="text-[10px] font-bold text-[#8e8d8c] font-inter uppercase tracking-widest ml-1.5">
+                        {(log.unit || "reps").toUpperCase()}
+                      </span>
                     </div>
-                  </div>
-
-                  {/* Card Bottom Row: Large Numeric Metric */}
-                  <div className="mt-4 flex items-baseline select-none">
-                    <span className="text-[28px] font-black text-white font-montserrat tracking-tight leading-none">
-                      {log.reps}
-                    </span>
-                    <span className="text-[10px] font-bold text-[#8e8d8c] font-inter uppercase tracking-widest ml-1.5">
-                      REPS
-                    </span>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         ))}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Montserrat, Inter } from "next/font/google";
 import "./globals.css";
 import BottomNavigation from "@/components/BottomNavigation";
+import { UserProvider } from "@/components/UserProvider";
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -48,7 +49,7 @@ export default function RootLayout({
         {/* Persistent mobile-first container */}
         <div className="w-full max-w-md min-h-screen bg-[#131313] flex flex-col relative border-x border-[#2a2a2a] shadow-2xl overflow-hidden pb-16">
           <main className="flex-1 px-4 py-6 overflow-y-auto">
-            {children}
+            <UserProvider>{children}</UserProvider>
           </main>
           <BottomNavigation />
         </div>

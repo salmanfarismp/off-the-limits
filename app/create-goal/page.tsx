@@ -3,9 +3,12 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+import { useUser } from "@/components/UserProvider";
 
 export default function CreateGoal() {
   const router = useRouter();
+  const { userId, isLoading } = useUser();
   const [goalName, setGoalName] = useState("");
   const [selectedIcon, setSelectedIcon] = useState(1); // Default dumbbell active
   const [finalGoal, setFinalGoal] = useState("0");
@@ -32,39 +35,40 @@ export default function CreateGoal() {
     }
   };
 
-  const handleCreateGoal = () => {
-    const iconType = icons.find((i) => i.id === selectedIcon)?.type || "dumbbell";
-    const mappedType =
-      iconType === "dumbbell"
-        ? "pushups"
-        : iconType === "runner" || iconType === "sprinter"
-        ? "pullups"
-        : "squats";
-
-    const newGoal = {
-      id: "goal-" + Date.now(),
-      type: mappedType,
-      title: goalName || "Unnamed Goal",
-      timestamp: "Logged just now",
-      reps: parseInt(finalGoal, 10) || 0,
-      badgeText: "NEW GOAL",
-      badgeType: "better" as const,
-    };
-
-    // Save to localStorage
-    const saved = localStorage.getItem("off-the-limits-logs");
-    let list = [];
-    if (saved) {
-      try {
-        list = JSON.parse(saved);
-      } catch (e) {}
+  const handleCreateGoal = async () => {
+    if (!userId) {
+      console.error("No user ID found to create goal");
+      return;
     }
-    list.unshift(newGoal);
-    localStorage.setItem("off-the-limits-logs", JSON.stringify(list));
+
+    const supabase = createClient();
+
+    // 1. Insert into Goal table
+    const { data: goalData, error: goalError } = await supabase
+      .from("Goal")
+      .insert({
+        name: goalName || "Unnamed Goal",
+        user: userId,
+      })
+      .select()
+      .single();
+
+    if (goalError) {
+      console.error("Error creating goal in Supabase:", goalError);
+      return;
+    }
 
     // Redirect to Home timeline
     router.push("/");
   };
+
+  if (isLoading) {
+    return (
+      <div className="absolute inset-0 bg-[#131313] z-50 flex justify-center items-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#abd600]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="absolute inset-0 bg-[#131313] z-50 overflow-y-auto px-4 py-6 flex flex-col justify-between select-none">
