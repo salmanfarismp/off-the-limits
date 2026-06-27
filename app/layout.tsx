@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Montserrat, Inter } from "next/font/google";
 import "./globals.css";
 import BottomNavigation from "@/components/BottomNavigation";
@@ -22,12 +22,13 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
 };
 
-export const viewport = {
+export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
   themeColor: "#131313",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -48,8 +49,8 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-[#0a0a0a] text-[#e5e2e1] flex justify-center items-start">
         {/* Persistent mobile-first container */}
-        <div className="w-full max-w-md min-h-screen bg-[#131313] flex flex-col relative border-x border-[#2a2a2a] shadow-2xl overflow-hidden pb-16">
-          <main className="flex-1 px-4 py-6 overflow-y-auto">
+        <div className="w-full max-w-md min-h-screen bg-[#131313] flex flex-col relative border-x border-[#2a2a2a] shadow-2xl overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
+          <main className="flex-1 px-4 pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-6 overflow-y-auto flex flex-col">
             <UserProvider>{children}</UserProvider>
           </main>
           <BottomNavigation />

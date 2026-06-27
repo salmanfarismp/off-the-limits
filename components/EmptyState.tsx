@@ -4,7 +4,7 @@ import Link from "next/link";
 export default function EmptyState() {
   return (
     <div
-      className="flex flex-col min-h-[calc(100vh-5rem)] justify-between"
+      className="flex-1 flex flex-col justify-between"
       style={{
         backgroundImage:
           "radial-gradient(circle at center, rgba(171, 214, 0, 0.04) 0%, rgba(19, 19, 19, 0) 75%)",

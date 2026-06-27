@@ -69,7 +69,7 @@ export default function CreateGoal() {
   }
 
   return (
-    <div className="absolute inset-0 bg-[#131313] z-50 overflow-y-auto px-4 py-6 flex flex-col justify-between select-none">
+    <div className="absolute inset-0 bg-[#131313] z-50 overflow-y-auto px-4 pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] flex flex-col justify-between select-none">
       {/* Scrollable Container Wrapper */}
       <div className="flex-1 flex flex-col">
         {/* Top Header Bar */}

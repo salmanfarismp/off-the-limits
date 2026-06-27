@@ -5,7 +5,7 @@ import React from "react";
 export default function PerformanceAnalytics() {
   return (
     <div
-      className="flex flex-col min-h-[calc(100vh-5rem)] justify-between relative pb-14 select-none"
+      className="flex-1 flex flex-col justify-between relative pb-14 select-none"
       style={{
         backgroundImage: "radial-gradient(circle at top right, rgba(171, 214, 0, 0.03) 0%, rgba(19, 19, 19, 0) 65%)",
       }}

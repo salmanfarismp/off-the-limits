@@ -153,7 +153,7 @@ export default function Home() {
 
   if (isUserLoading || isLoadingTimeline) {
     return (
-      <div className="flex flex-col min-h-[calc(100vh-5rem)] justify-center items-center">
+      <div className="flex-1 flex flex-col justify-center items-center">
         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#abd600]"></div>
         <p className="text-sm text-[#8e8d8c] mt-4 font-inter">
           Loading Performance Archive...
@@ -170,7 +170,7 @@ export default function Home() {
   // Render Populated Daily Log View
   return (
     <div
-      className="flex flex-col min-h-[calc(100vh-5rem)] justify-between relative pb-14"
+      className="flex-1 flex flex-col justify-between relative pb-14"
       style={{
         backgroundImage:
           "radial-gradient(circle at top right, rgba(171, 214, 0, 0.03) 0%, rgba(19, 19, 19, 0) 65%)",
