@@ -7,6 +7,8 @@ import { usePathname } from "next/navigation";
 export default function BottomNavigation() {
   const pathname = usePathname();
 
+  if (pathname === "/log-form" || pathname === "/create-goal") return null;
+
   return (
     <nav className="absolute bottom-0 left-0 right-0 w-full bg-[#1c1b1b] border-t border-[#2a2a2a] z-50 select-none pb-[env(safe-area-inset-bottom,0px)]">
       <div className="flex justify-around items-center h-16 px-4">
@@ -66,4 +68,3 @@ export default function BottomNavigation() {
     </nav>
   );
 }
-
