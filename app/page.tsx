@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
 
 interface LogItem {
   id: string;
@@ -69,18 +70,82 @@ const initialDayGroups: DayGroup[] = [
 export default function Home() {
   const [dayGroups, setDayGroups] = useState<DayGroup[]>(initialDayGroups);
 
-  const clearLogs = () => setDayGroups([]);
-  const resetLogs = () => setDayGroups(initialDayGroups);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("off-the-limits-logs");
+      if (saved) {
+        try {
+          const customLogs = JSON.parse(saved);
+          if (customLogs && customLogs.length > 0) {
+            setDayGroups((prev) => {
+              // Map all groups, replacing entries if custom logs contain the same ID
+              return prev.map((group) => {
+                const updatedEntries = group.entries.map((entry) => {
+                  const customOverride = customLogs.find((c: any) => c.id === entry.id);
+                  if (customOverride) {
+                    return customOverride;
+                  }
+                  return entry;
+                });
+                
+                // If it is the first group (TODAY, OCT 24), we also prepend any new custom logs
+                if (group.date === "TODAY, OCT 24") {
+                  // Find custom logs that do NOT override any existing logs in any of the groups
+                  const allBaseIds = new Set(
+                    prev.flatMap((g) => g.entries.map((e) => e.id))
+                  );
+                  const newCustomLogs = customLogs.filter(
+                    (c: any) => !allBaseIds.has(c.id)
+                  );
+                  // Filter out duplicates that might already be in updatedEntries
+                  const existingIds = new Set(updatedEntries.map((e) => e.id));
+                  const uniqueNewCustom = newCustomLogs.filter((c: any) => !existingIds.has(c.id));
+                  
+                  return {
+                    ...group,
+                    entries: [...uniqueNewCustom, ...updatedEntries]
+                  };
+                }
+                
+                return {
+                  ...group,
+                  entries: updatedEntries
+                };
+              });
+            });
+          }
+        } catch (e) {}
+      }
+    }
+  }, []);
+
+  const clearLogs = () => {
+    setDayGroups([]);
+    localStorage.removeItem("off-the-limits-logs");
+  };
+
+  const resetLogs = () => {
+    setDayGroups(initialDayGroups);
+    localStorage.removeItem("off-the-limits-logs");
+  };
 
   const deleteLog = (id: string) => {
-    setDayGroups(
-      dayGroups
-        .map((group) => ({
-          ...group,
-          entries: group.entries.filter((entry) => entry.id !== id),
-        }))
-        .filter((group) => group.entries.length > 0)
-    );
+    const updatedGroups = dayGroups
+      .map((group) => ({
+        ...group,
+        entries: group.entries.filter((entry) => entry.id !== id),
+      }))
+      .filter((group) => group.entries.length > 0);
+    setDayGroups(updatedGroups);
+
+    const saved = localStorage.getItem("off-the-limits-logs");
+    if (saved) {
+      try {
+        const customLogs = JSON.parse(saved);
+        const filtered = customLogs.filter((c: any) => c.id !== id);
+        localStorage.setItem("off-the-limits-logs", JSON.stringify(filtered));
+      } catch (e) {}
+    }
   };
 
   const addNewGoal = () => {
@@ -230,13 +295,13 @@ export default function Home() {
             Push your boundaries. Create your first goal to start tracking your progress and hit your limits.
           </p>
 
-          {/* Action Button - Adds Mock Logs to dynamic state */}
-          <button
-            className="w-full max-w-[280px] bg-[#abd600] text-black font-montserrat font-bold text-sm py-4 rounded-[0.5rem] mt-8 uppercase tracking-wider active:scale-[0.98] transition-transform duration-100 shadow-md shadow-[#abd600]/10 hover:brightness-105"
-            onClick={resetLogs}
+          {/* Action Link - Navigates to Create Goal Route */}
+          <Link
+            href="/create-goal"
+            className="w-full max-w-[280px] bg-[#abd600] text-black font-montserrat font-bold text-sm py-4 rounded-[0.5rem] mt-8 uppercase tracking-wider active:scale-[0.98] transition-transform duration-100 shadow-md shadow-[#abd600]/10 hover:brightness-105 text-center flex items-center justify-center"
           >
             + ADD NEW GOAL
-          </button>
+          </Link>
 
           {/* Footer Meta Labels */}
           <div className="flex flex-col items-center gap-2 mt-6 text-[10px] font-bold tracking-widest text-[#8e8d8c] font-inter select-none">
@@ -340,14 +405,14 @@ export default function Home() {
             {/* Daily Log Cards List */}
             <div className="mt-5 flex flex-col gap-4 relative z-10">
               {group.entries.map((log) => (
-                <div
+                <Link
                   key={log.id}
-                  onClick={() => deleteLog(log.id)}
-                  className="group relative bg-[#1c1b1b] border border-[#2a2a2a] border-l-4 border-l-[#0266ff] rounded-[0.5rem] p-4 flex flex-col active:scale-[0.98] transition-transform duration-100 cursor-pointer select-none"
+                  href={`/log-form?id=${log.id}&title=${encodeURIComponent(log.title)}&reps=${log.reps}&type=${log.type}`}
+                  className="group relative bg-[#1c1b1b] border border-[#2a2a2a] border-l-4 border-l-[#0266ff] rounded-[0.5rem] p-4 flex flex-col active:scale-[0.98] transition-transform duration-100 cursor-pointer select-none animate-fade-in"
                 >
-                  {/* Delete helper hover overlay */}
+                  {/* Edit helper hover overlay */}
                   <div className="absolute top-1.5 right-2 text-[9px] text-[#8e8d8c] opacity-0 group-hover:opacity-100 transition-opacity">
-                    Click to remove
+                    Click to edit log
                   </div>
 
                   {/* Card Top Row */}
@@ -481,7 +546,7 @@ export default function Home() {
                       REPS
                     </span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
@@ -496,14 +561,14 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Floating Action Button (FAB) layer - constrained within mobile layout */}
+      {/* Floating Action Link (FAB) layer - constrained within mobile layout */}
       <div className="absolute bottom-4 right-0 z-40">
-        <button
-          onClick={addNewGoal}
-          className="bg-[#abd600] text-black font-montserrat font-extrabold text-[12px] px-5 py-3.5 rounded-full uppercase tracking-wider active:scale-[0.98] transition-transform duration-100 shadow-xl shadow-[#abd600]/20 flex items-center gap-1.5 hover:brightness-105"
+        <Link
+          href="/create-goal"
+          className="bg-[#abd600] text-black font-montserrat font-extrabold text-[12px] px-5 py-3.5 rounded-full uppercase tracking-wider active:scale-[0.98] transition-transform duration-100 shadow-xl shadow-[#abd600]/20 flex items-center gap-1.5 hover:brightness-105 text-center flex items-center justify-center"
         >
           + ADD NEW GOAL
-        </button>
+        </Link>
       </div>
     </div>
   );

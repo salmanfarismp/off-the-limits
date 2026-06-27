@@ -1,20 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
-
-type Tab = "home" | "graph";
+import React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function BottomNavigation() {
-  const [activeTab, setActiveTab] = useState<Tab>("home");
+  const pathname = usePathname();
 
   return (
-    <nav className="absolute bottom-0 left-0 right-0 w-full bg-[#1c1b1b] border-t border-[#2a2a2a] z-50">
+    <nav className="absolute bottom-0 left-0 right-0 w-full bg-[#1c1b1b] border-t border-[#2a2a2a] z-50 select-none">
       <div className="flex justify-around items-center h-16 px-4">
         {/* HOME Button */}
-        <button
-          onClick={() => setActiveTab("home")}
+        <Link
+          href="/"
           className={`flex flex-col items-center justify-center w-24 h-14 active:scale-[0.98] transition-transform outline-none ${
-            activeTab === "home" ? "text-[#abd600]" : "text-[#8e8d8c]"
+            pathname === "/" ? "text-[#abd600]" : "text-[#8e8d8c]"
           }`}
         >
           <div className="mb-1">
@@ -31,13 +31,13 @@ export default function BottomNavigation() {
           <span className="text-[10px] font-bold tracking-wider font-inter uppercase">
             HOME
           </span>
-        </button>
+        </Link>
 
         {/* GRAPH Button */}
-        <button
-          onClick={() => setActiveTab("graph")}
+        <Link
+          href="/graph"
           className={`flex flex-col items-center justify-center w-24 h-14 active:scale-[0.98] transition-transform outline-none ${
-            activeTab === "graph" ? "text-[#abd600]" : "text-[#8e8d8c]"
+            pathname === "/graph" ? "text-[#abd600]" : "text-[#8e8d8c]"
           }`}
         >
           <div className="mb-1">
@@ -61,7 +61,7 @@ export default function BottomNavigation() {
           <span className="text-[10px] font-bold tracking-wider font-inter uppercase">
             GRAPH
           </span>
-        </button>
+        </Link>
       </div>
     </nav>
   );
